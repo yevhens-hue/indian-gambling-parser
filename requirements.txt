@@ -1,0 +1,22 @@
+playwright>=1.40.0
+beautifulsoup4>=4.12.2
+requests>=2.31.0
+fastapi>=0.104.1
+uvicorn>=0.24.0
+pydantic>=2.5.0
+openpyxl>=3.1.2
+pandas>=2.1.0
+tldextract>=5.0.0
+gspread>=5.12.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+
+# Опциональные зависимости для веб-сервиса
+streamlit>=1.28.0  # Для быстрого прототипа (Вариант 3)
+plotly>=5.17.0     # Для графиков в Streamlit
+
+# Тестирование
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0

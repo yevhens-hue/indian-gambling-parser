@@ -1,0 +1,62 @@
+═══════════════════════════════════════════════════════════════
+  БЫСТРАЯ НАСТРОЙКА GOOGLE SHEETS
+═══════════════════════════════════════════════════════════════
+
+ШАГ 1: Создание Service Account
+─────────────────────────────────
+1. Откройте: https://console.cloud.google.com/
+2. Создайте новый проект (или выберите существующий)
+3. Перейдите: APIs & Services → Library
+4. Найдите и включите:
+   ✓ Google Sheets API
+   ✓ Google Drive API
+
+ШАГ 2: Создание ключа
+──────────────────────
+1. Перейдите: APIs & Services → Credentials
+2. Нажмите: Create Credentials → Service Account
+3. Заполните имя (например: "parser-service")
+4. Нажмите: Create and Continue
+5. Пропустите шаг "Grant access" (нажмите Continue)
+6. Нажмите: Done
+
+ШАГ 3: Скачивание JSON ключа
+─────────────────────────────
+1. В списке Service Accounts найдите созданный аккаунт
+2. Нажмите на него
+3. Перейдите на вкладку: Keys
+4. Нажмите: Add Key → Create new key
+5. Выберите: JSON
+6. Скачайте файл
+
+ШАГ 4: Размещение файла
+────────────────────────
+1. Переименуйте скачанный файл в: google_credentials.json
+2. Поместите его в папку проекта:
+   /Users/yevhen.shaforostov/indian_gambling_parser/
+
+ШАГ 5: Предоставление доступа к таблице
+─────────────────────────────────────────
+1. Откройте JSON файл (google_credentials.json)
+2. Найдите поле "client_email" (например: parser-service@project-id.iam.gserviceaccount.com)
+3. Откройте Google Таблицу:
+   https://docs.google.com/spreadsheets/d/1kw74QoJGHKlaLOD-FGEPRU0DXKOAh4S-8_1Bz6burFE
+4. Нажмите кнопку "Поделиться" (Share)
+5. Вставьте email из "client_email"
+6. Дайте права: Редактор (Editor)
+7. Нажмите: Отправить (Send)
+
+ШАГ 6: Проверка
+────────────────
+Запустите тест:
+  python3 test_google_sheets.py
+
+Если всё настроено правильно, вы увидите:
+  ✓ Файл google_credentials.json найден
+  ✓ Storage инициализирован
+  ✓ Данные экспортированы в Google Sheets
+
+═══════════════════════════════════════════════════════════════
+
+
+

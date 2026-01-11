@@ -1,0 +1,32 @@
+═══════════════════════════════════════════════════════════════
+  🚀 КОМАНДЫ ДЛЯ ЗАПУСКА ПАРСЕРА
+═══════════════════════════════════════════════════════════════
+
+1. ПЕРЕЙТИ В ПАПКУ:
+   cd indian_gambling_parser
+
+2. ОСНОВНАЯ КОМАНДА ЗАПУСКА:
+   python3 main_parser_playwright.py --merchant 1xbet --url https://indian.1xbet.com
+
+3. ЗАПУСК В HEADLESS РЕЖИМЕ (без окна браузера):
+   python3 main_parser_playwright.py --merchant 1xbet --url https://indian.1xbet.com --headless
+
+4. ПРОСМОТР РЕЗУЛЬТАТОВ:
+   python3 main_parser_playwright.py --show-results
+
+5. ПРОСМОТР РЕЗУЛЬТАТОВ ДЛЯ КОНКРЕТНОГО МЕРЧАНТА:
+   python3 main_parser_playwright.py --show-results --merchant 1xbet
+
+6. ЭКСПОРТ В EXCEL:
+   python3 main_parser_playwright.py --export-xlsx results.xlsx
+
+7. СПИСОК ДОСТУПНЫХ МЕРЧАНТОВ:
+   python3 main_parser_playwright.py --list-merchants
+
+═══════════════════════════════════════════════════════════════
+
+ПОЛНАЯ КОМАНДА ИЗ КОРНЕВОЙ ПАПКИ ПРОЕКТА:
+cd /Users/yevhen.shaforostov/indian_gambling_parser && python3 main_parser_playwright.py --merchant 1xbet --url https://indian.1xbet.com
+
+
+

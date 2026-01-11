@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: providers-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../providers_data.db:/app/data/providers_data.db
+      - ../storage.py:/app/storage.py
+      - ../screenshots:/app/screenshots
+      - ../google_credentials.json:/app/google_credentials.json:ro
+      - ./backend/app:/app/app
+    environment:
+      - DB_PATH=/app/data/providers_data.db
+      - XLSX_PATH=/app/data/providers_data.xlsx
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID:-1kw74QoJGHKlaLOD-FGEPRU0DXKOAh4S-8_1Bz6burFE}
+      - GOOGLE_CREDENTIALS_PATH=/app/google_credentials.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: providers-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://localhost/api
+
+  # Опционально: nginx как reverse proxy (если frontend не использует свой nginx)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: providers-nginx
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - backend
+  #     - frontend
+  #   restart: unless-stopped
+
+networks:
+  default:
+    name: providers-network

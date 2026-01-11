@@ -1,0 +1,35 @@
+═══════════════════════════════════════════════════════════════
+  🔧 УСТАНОВКА БРАУЗЕРОВ PLAYWRIGHT
+═══════════════════════════════════════════════════════════════
+
+Если видите ошибку:
+  "Executable doesn't exist at .../Google Chrome for Testing"
+
+ВЫПОЛНИТЕ В ВИРТУАЛЬНОМ ОКРУЖЕНИИ:
+
+1. Способ 1 (рекомендуется):
+   python3 -m playwright install chromium
+
+2. Способ 2:
+   playwright install chromium
+
+3. Способ 3 (установить все браузеры):
+   playwright install
+
+═══════════════════════════════════════════════════════════════
+
+ПОЛНАЯ КОМАНДА:
+
+cd /Users/yevhen.shaforostov/indian_gambling_parser
+python3 -m playwright install chromium
+
+═══════════════════════════════════════════════════════════════
+
+ПРОВЕРКА УСТАНОВКИ:
+
+python3 -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(headless=True); print('✓ OK'); browser.close(); p.stop()"
+
+═══════════════════════════════════════════════════════════════
+
+
+

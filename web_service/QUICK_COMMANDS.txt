@@ -1,0 +1,25 @@
+# ⚡ БЫСТРЫЕ КОМАНДЫ ЗАПУСКА
+
+## 🚀 Запуск всего за 1 команду:
+cd web_service && ./start_local.sh
+
+## 📋 Или вручную (2 терминала):
+
+### Terminal 1 - Backend:
+cd web_service/backend
+python3 start.py
+
+### Terminal 2 - Frontend:
+cd web_service/frontend
+npm run dev
+
+## 📥 Импорт данных:
+curl -X POST "http://localhost:8000/api/import/google-sheets?gid=396039446"
+
+## 🔍 Проверка:
+curl http://localhost:8000/health
+
+## 🌐 Открыть:
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
