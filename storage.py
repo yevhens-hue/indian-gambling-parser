@@ -210,6 +210,98 @@ class Storage:
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
 
+    def get_providers_paginated(
+        self,
+        merchant: Optional[str] = None,
+        provider_domain: Optional[str] = None,
+        account_type: Optional[str] = None,
+        payment_method: Optional[str] = None,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+        sort_by: str = "timestamp_utc",
+        sort_order: str = "desc"
+    ) -> Dict:
+        """
+        Получение провайдеров с фильтрацией и пагинацией на уровне SQL.
+        
+        Оптимизированный метод, который выполняет фильтрацию, сортировку и 
+        пагинацию прямо в SQL запросе вместо Python.
+        
+        Returns:
+            Dict с items, total, skip, limit, has_more
+        """
+        # Валидация sort_by для предотвращения SQL injection
+        allowed_sort_fields = {
+            'id', 'merchant', 'merchant_domain', 'provider_domain', 'provider_name',
+            'account_type', 'payment_method', 'timestamp_utc', 'detected_in'
+        }
+        if sort_by not in allowed_sort_fields:
+            sort_by = 'timestamp_utc'
+        
+        # Валидация sort_order
+        sort_order = 'DESC' if sort_order.lower() == 'desc' else 'ASC'
+        
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Строим WHERE clause
+            conditions = []
+            params = []
+            
+            if merchant:
+                conditions.append("merchant = ?")
+                params.append(merchant)
+            
+            if provider_domain:
+                conditions.append("provider_domain LIKE ?")
+                params.append(f"%{provider_domain}%")
+            
+            if account_type:
+                conditions.append("account_type = ?")
+                params.append(account_type)
+            
+            if payment_method:
+                conditions.append("payment_method = ?")
+                params.append(payment_method)
+            
+            if search:
+                search_pattern = f"%{search}%"
+                conditions.append("""
+                    (merchant LIKE ? OR merchant_domain LIKE ? OR provider_domain LIKE ? 
+                     OR provider_name LIKE ? OR detected_in LIKE ? OR payment_method LIKE ?
+                     OR provider_entry_url LIKE ? OR final_url LIKE ?)
+                """)
+                params.extend([search_pattern] * 8)
+            
+            where_clause = " AND ".join(conditions) if conditions else "1=1"
+            
+            # Подсчёт общего количества
+            count_query = f"SELECT COUNT(*) FROM providers WHERE {where_clause}"
+            cursor.execute(count_query, params)
+            total = cursor.fetchone()[0]
+            
+            # Основной запрос с пагинацией
+            query = f"""
+                SELECT * FROM providers 
+                WHERE {where_clause}
+                ORDER BY {sort_by} {sort_order}
+                LIMIT ? OFFSET ?
+            """
+            cursor.execute(query, params + [limit, skip])
+            
+            rows = cursor.fetchall()
+            items = [dict(row) for row in rows]
+            
+            return {
+                "items": items,
+                "total": total,
+                "skip": skip,
+                "limit": limit,
+                "has_more": (skip + len(items)) < total
+            }
+
     def export_to_xlsx(self, output_path: Optional[str] = None):
         """Экспорт данных в XLSX и Google Sheets"""
         if output_path is None:

@@ -46,8 +46,8 @@ async def export_xlsx(
                     try:
                         if os.path.exists(path):
                             os.unlink(path)
-                    except:
-                        pass
+                    except OSError as e:
+                        logger.warning(f"Failed to cleanup temp file {path}: {e}")
                 
                 background_tasks.add_task(cleanup_file, output_path)
                 
@@ -192,8 +192,8 @@ async def export_pdf(background_tasks: BackgroundTasks):
             try:
                 if os.path.exists(path):
                     os.unlink(path)
-            except:
-                pass
+            except OSError as e:
+                logger.warning(f"Failed to cleanup temp PDF file {path}: {e}")
         
         background_tasks.add_task(cleanup_file, output_path)
         

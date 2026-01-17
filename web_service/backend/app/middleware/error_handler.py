@@ -1,13 +1,11 @@
 """
-Глобальная обработка ошибок и исключений
+Глобальная обработка ошибок и исключений (улучшенная версия)
 """
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.utils.logger import logger
-import traceback
-from typing import Any, Dict
+from app.utils.error_handler import get_error_handler
 
 
 async def validation_exception_handler(
@@ -15,8 +13,10 @@ async def validation_exception_handler(
     exc: RequestValidationError
 ) -> JSONResponse:
     """
-    Обработчик ошибок валидации Pydantic
+    Обработчик ошибок валидации Pydantic (улучшенный)
     """
+    error_handler = get_error_handler()
+    
     errors = []
     for error in exc.errors():
         field = ".".join(str(loc) for loc in error.get("loc", []))
@@ -26,23 +26,7 @@ async def validation_exception_handler(
             "type": error.get("type")
         })
     
-    logger.warning(
-        f"Validation error on {request.method} {request.url.path}",
-        extra={
-            "errors": errors,
-            "path": str(request.url.path),
-            "method": request.method
-        }
-    )
-    
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": "Validation Error",
-            "detail": errors,
-            "path": str(request.url.path)
-        }
-    )
+    return error_handler.handle_validation_error(request, errors)
 
 
 async def http_exception_handler(
@@ -50,27 +34,10 @@ async def http_exception_handler(
     exc: StarletteHTTPException
 ) -> JSONResponse:
     """
-    Обработчик HTTP исключений
+    Обработчик HTTP исключений (улучшенный)
     """
-    logger.warning(
-        f"HTTP {exc.status_code} on {request.method} {request.url.path}",
-        extra={
-            "status_code": exc.status_code,
-            "detail": exc.detail,
-            "path": str(request.url.path),
-            "method": request.method
-        }
-    )
-    
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": "HTTP Exception",
-            "status_code": exc.status_code,
-            "detail": exc.detail,
-            "path": str(request.url.path)
-        }
-    )
+    error_handler = get_error_handler()
+    return error_handler.handle_http_exception(request, exc)
 
 
 async def general_exception_handler(
@@ -78,39 +45,23 @@ async def general_exception_handler(
     exc: Exception
 ) -> JSONResponse:
     """
-    Обработчик всех необработанных исключений
+    Обработчик всех необработанных исключений (улучшенный)
     """
-    error_traceback = traceback.format_exc()
+    error_handler = get_error_handler()
     
-    logger.error(
-        f"Unhandled exception on {request.method} {request.url.path}",
-        extra={
-            "exception_type": type(exc).__name__,
-            "exception_message": str(exc),
-            "path": str(request.url.path),
-            "method": request.method,
-            "traceback": error_traceback
-        },
-        exc_info=True
-    )
+    # Определяем статус код в зависимости от типа исключения
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    detail = None
     
-    # В production не показываем полный traceback
-    import os
-    is_development = os.getenv("ENVIRONMENT", "production") == "development"
+    # Специальная обработка для некоторых типов исключений
+    if isinstance(exc, ValueError):
+        status_code = status.HTTP_400_BAD_REQUEST
+        detail = str(exc)
+    elif isinstance(exc, PermissionError):
+        status_code = status.HTTP_403_FORBIDDEN
+        detail = "Permission denied"
+    elif isinstance(exc, FileNotFoundError):
+        status_code = status.HTTP_404_NOT_FOUND
+        detail = "Resource not found"
     
-    response_content: Dict[str, Any] = {
-        "error": "Internal Server Error",
-        "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-        "detail": "An unexpected error occurred",
-        "path": str(request.url.path)
-    }
-    
-    if is_development:
-        response_content["traceback"] = error_traceback
-        response_content["exception_type"] = type(exc).__name__
-        response_content["exception_message"] = str(exc)
-    
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=response_content
-    )
+    return error_handler.handle_exception(request, exc, status_code, detail)

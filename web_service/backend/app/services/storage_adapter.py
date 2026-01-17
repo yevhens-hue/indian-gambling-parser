@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from app.config import BASE_DIR, DB_PATH, XLSX_PATH, GOOGLE_SHEET_ID, GOOGLE_CREDENTIALS_PATH
 from app.services.cache import get_cache_service
+from app.services.metrics import get_metrics_service
 from app.utils.logger import logger
 
 # Добавляем корневую директорию в путь для импорта
@@ -54,6 +55,9 @@ class StorageAdapter:
         """
         Получить список провайдеров с фильтрацией, сортировкой и пагинацией
         
+        Использует оптимизированный SQL запрос с фильтрацией и пагинацией
+        на уровне базы данных.
+        
         Args:
             merchant: Фильтр по мерчанту
             provider_domain: Фильтр по домену провайдера
@@ -66,90 +70,35 @@ class StorageAdapter:
             search: Текстовый поиск по всем полям
         
         Returns:
-            Словарь с items, total, skip, limit
+            Словарь с items, total, skip, limit, has_more
         """
         # Замеряем время выполнения запроса
         start_time = time.time()
         
-        # Получаем все данные из Storage
-        providers = self.storage.get_all_providers(merchant=merchant)
+        # Используем оптимизированный метод с SQL пагинацией
+        result = self.storage.get_providers_paginated(
+            merchant=merchant,
+            provider_domain=provider_domain,
+            account_type=account_type,
+            payment_method=payment_method,
+            search=search,
+            skip=skip,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
         
         # Записываем метрику времени выполнения БД запроса
         db_duration = time.time() - start_time
         metrics = get_metrics_service()
-        metrics.record_db_query("get_all_providers", db_duration)
-        
-        # Применяем фильтры
-        if provider_domain:
-            providers = [
-                p for p in providers 
-                if provider_domain.lower() in p.get('provider_domain', '').lower()
-            ]
-        
-        if account_type:
-            providers = [
-                p for p in providers 
-                if p.get('account_type') == account_type
-            ]
-        
-        if payment_method:
-            providers = [
-                p for p in providers 
-                if p.get('payment_method') == payment_method
-            ]
-        
-        # Текстовый поиск по всем текстовым полям
-        if search:
-            search_lower = search.lower()
-            filtered = []
-            search_fields = [
-                'merchant', 'merchant_domain', 'provider_domain', 'provider_name',
-                'account_type', 'payment_method', 'detected_in', 'provider_entry_url',
-                'final_url', 'cashier_url'
-            ]
-            
-            for provider in providers:
-                for field in search_fields:
-                    value = str(provider.get(field, '')).lower()
-                    if search_lower in value:
-                        filtered.append(provider)
-                        break
-            
-            providers = filtered
-        
-        # Сортировка
-        reverse = sort_order.lower() == "desc"
-        try:
-            providers.sort(
-                key=lambda x: x.get(sort_by, '') or '',
-                reverse=reverse
-            )
-        except (TypeError, KeyError):
-            # Если сортировка не удалась, сортируем по timestamp
-            providers.sort(
-                key=lambda x: x.get('timestamp_utc', '') or '',
-                reverse=True
-            )
-        
-        # Подсчет общего количества (до пагинации)
-        total = len(providers)
-        
-        # Пагинация
-        providers = providers[skip:skip + limit]
+        metrics.record_db_query("get_providers_paginated", db_duration)
         
         # Убеждаемся, что ID присутствует (для React ключей)
-        for i, provider in enumerate(providers):
+        for i, provider in enumerate(result["items"]):
             if 'id' not in provider or provider['id'] is None:
-                # Используем комбинацию полей как временный ID, если нет реального ID
                 provider['id'] = skip + i + 1
         
-        return {
-            "items": providers,
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-            "has_more": (skip + len(providers)) < total
-        }
+        return result
     
     def get_provider_by_id(self, provider_id: int) -> Optional[Dict]:
         """Получить провайдера по ID"""

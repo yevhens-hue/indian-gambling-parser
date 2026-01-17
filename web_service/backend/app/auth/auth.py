@@ -1,4 +1,6 @@
 """Модуль авторизации (JWT)"""
+import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -6,10 +8,10 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-# Настройки безопасности
-SECRET_KEY = "your-secret-key-change-in-production"  # В продакшене использовать переменную окружения
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# Настройки безопасности из переменных окружения
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -58,23 +60,25 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         )
 
 
-# Простой in-memory хранилище пользователей (в продакшене использовать БД)
-# Используем предвычисленный хеш для избежания проблем с импортом
-# В production используйте переменные окружения или БД
+# Простой in-memory хранилище пользователей
+# В production используйте БД и переменные окружения для credentials
 _ADMIN_PASSWORD_HASH = None
 
 def _get_admin_hash():
     """Ленивое вычисление хеша пароля admin"""
     global _ADMIN_PASSWORD_HASH
     if _ADMIN_PASSWORD_HASH is None:
-        _ADMIN_PASSWORD_HASH = get_password_hash("admin123")
+        # Пароль из переменной окружения или генерируется при первом запуске
+        admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+        _ADMIN_PASSWORD_HASH = get_password_hash(admin_password)
     return _ADMIN_PASSWORD_HASH
 
 def get_users_db():
     """Получить БД пользователей"""
+    admin_username = os.getenv("ADMIN_USERNAME", "admin")
     return {
-        "admin": {
-            "username": "admin",
+        admin_username: {
+            "username": admin_username,
             "hashed_password": _get_admin_hash(),
             "role": "admin"
         }
@@ -83,7 +87,8 @@ def get_users_db():
 
 def authenticate_user(username: str, password: str):
     """Аутентификация пользователя"""
-    user = USERS_DB.get(username)
+    users_db = get_users_db()
+    user = users_db.get(username)
     if not user:
         return False
     if not verify_password(password, user["hashed_password"]):

@@ -1,0 +1,64 @@
+services:
+  # Backend API Service
+  - type: web
+    name: indian-gambling-parser-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter  # или free для начала
+    region: frankfurt  # или другой регион
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DB_PATH
+        value: /app/data/providers_data.db
+      - key: XLSX_PATH
+        value: /app/data/providers_data.xlsx
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: indian-gambling-parser-redis
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://indian-gambling-parser-frontend.onrender.com,http://localhost:5173
+      - key: API_PREFIX
+        value: /api
+      - key: AUTH_ENABLED
+        value: "false"  # или "true" если нужна аутентификация
+      - key: CACHE_TTL
+        value: "300"
+      - key: SENTRY_DSN
+        sync: false  # Установите вручную если используете Sentry
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # Frontend Service
+  - type: web
+    name: indian-gambling-parser-frontend
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: starter  # или free для начала
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://indian-gambling-parser-api.onrender.com
+      - key: VITE_WS_URL
+        value: wss://indian-gambling-parser-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    autoDeploy: true
+
+  # Redis Service
+  - type: redis
+    name: indian-gambling-parser-redis
+    plan: starter  # или free для начала
+    region: frankfurt
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []  # Разрешить доступ только из Render

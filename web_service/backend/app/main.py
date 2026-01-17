@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.config import CORS_ORIGINS, API_PREFIX, AUTH_ENABLED
 from app.api import providers, export, screenshots, websocket, auth
-from app.api import import_api, analytics, audit
+from app.api import import_api, analytics, audit, cache_stats, monitoring
 from app.utils.logger import logger
 from app.services.metrics import get_metrics_service
 from app.utils.sentry_config import init_sentry
@@ -21,20 +21,25 @@ from app.middleware.error_handler import (
     http_exception_handler,
     general_exception_handler
 )
+from app.middleware.compression import CompressionMiddleware
+from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.middleware.response_cache import ResponseCacheMiddleware
+from app.middleware.timeout import TimeoutMiddleware
+from app.middleware.performance import PerformanceMonitoringMiddleware
+from app.middleware.input_sanitization import InputSanitizationMiddleware
+from app.middleware.security_audit import SecurityAuditMiddleware
+from app.middleware.ip_filter import IPFilterMiddleware
+from app.middleware.query_optimization import QueryOptimizationMiddleware
 
-# Опциональная зависимость для health checks
-try:
-    import psutil
-    PSUTIL_AVAILABLE = True
-except ImportError:
-    PSUTIL_AVAILABLE = False
 
 # Инициализация Sentry (опционально)
 if os.getenv("SENTRY_DSN"):
     init_sentry()
 
-# Настройка Rate Limiting
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+# Настройка Rate Limiting (с Redis если доступен)
+from app.utils.redis_rate_limiter import get_limiter
+limiter = get_limiter()
 
 # Создаем FastAPI приложение
 app = FastAPI(
@@ -135,8 +140,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request ID middleware (должен быть первым для отслеживания всех запросов)
+app.add_middleware(RequestIDMiddleware)
+
+# IP Filter middleware (фильтрация по IP адресам)
+# Можно настроить через переменные окружения: IP_FILTER_ENABLED, IP_WHITELIST, IP_BLACKLIST
+app.add_middleware(IPFilterMiddleware, enabled=False)  # По умолчанию отключен
+
+# Input Sanitization middleware (санитизация входных данных)
+app.add_middleware(InputSanitizationMiddleware, max_request_size=10 * 1024 * 1024)  # 10MB
+
+# Security Audit middleware (аудит безопасности)
+app.add_middleware(SecurityAuditMiddleware, log_all_requests=False)
+
+# Performance monitoring middleware (мониторинг производительности)
+app.add_middleware(PerformanceMonitoringMiddleware, slow_request_threshold=1.0)
+
+# Query Optimization middleware (мониторинг БД запросов)
+app.add_middleware(QueryOptimizationMiddleware, slow_query_threshold=1.0)
+
+# Timeout middleware (ограничивает время выполнения запросов)
+app.add_middleware(TimeoutMiddleware, timeout=30.0)  # 30 секунд
+
+# Security headers middleware (расширенные security headers)
+app.add_middleware(SecurityHeadersMiddleware, strict_transport_security=True)
+
+# Response cache middleware (кэширует GET запросы)
+app.add_middleware(
+    ResponseCacheMiddleware,
+    cache_ttl=300,  # 5 минут
+    cacheable_paths=["/api/providers", "/api/providers/stats"]  # Кэшируем только эти пути
+)
+
+# Compression middleware для уменьшения размера ответов
+app.add_middleware(CompressionMiddleware)
+
 # Подключение роутеров
 app.include_router(auth.router, prefix=API_PREFIX)
+from app.api import health
+app.include_router(health.router, prefix="/health")
 app.include_router(providers.router, prefix=API_PREFIX)
 app.include_router(export.router, prefix=API_PREFIX)
 app.include_router(screenshots.router, prefix=API_PREFIX)
@@ -144,6 +186,8 @@ app.include_router(websocket.router, prefix=API_PREFIX)
 app.include_router(import_api.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(audit.router, prefix=API_PREFIX)
+app.include_router(cache_stats.router, prefix=API_PREFIX)
+app.include_router(monitoring.router, prefix=f"{API_PREFIX}/monitoring")
 
 # API версионирование (v1)
 from app.api.v1 import providers as providers_v1
@@ -159,108 +203,6 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs",
         "api_prefix": API_PREFIX
-    }
-
-
-@app.get("/health")
-async def health_check():
-    """
-    Health check endpoint с детальными проверками
-    
-    Returns:
-        - status: ok/unhealthy
-        - checks: результаты проверок компонентов
-        - timestamp: время проверки
-    """
-    checks = {}
-    all_healthy = True
-    
-    # Проверка БД
-    try:
-        from app.services.storage_adapter import StorageAdapter
-        adapter = StorageAdapter()
-        providers = adapter.storage.get_all_providers(merchant=None)
-        checks["database"] = {
-            "status": "ok",
-            "message": f"Connected, {len(providers)} providers",
-            "providers_count": len(providers)
-        }
-    except Exception as e:
-        checks["database"] = {
-            "status": "error",
-            "message": str(e)
-        }
-        all_healthy = False
-    
-    # Проверка Redis (опционально)
-    try:
-        from app.services.cache import get_cache_service
-        cache = get_cache_service()
-        checks["cache"] = {
-            "status": "ok" if cache.enabled else "disabled",
-            "message": "Enabled" if cache.enabled else "Redis not available (optional)",
-            "enabled": cache.enabled
-        }
-    except Exception as e:
-        checks["cache"] = {
-            "status": "disabled",
-            "message": f"Redis not available: {str(e)} (optional)"
-        }
-    
-    # Проверка дискового пространства (если psutil доступен)
-    if PSUTIL_AVAILABLE:
-        try:
-            disk_usage = psutil.disk_usage('/')
-            free_percent = (disk_usage.free / disk_usage.total) * 100
-            checks["disk"] = {
-                "status": "ok" if free_percent > 10 else "warning",
-                "message": f"{free_percent:.1f}% free",
-                "free_percent": round(free_percent, 1),
-                "free_gb": round(disk_usage.free / (1024**3), 2)
-            }
-            if free_percent < 10:
-                all_healthy = False
-        except Exception as e:
-            checks["disk"] = {
-                "status": "unknown",
-                "message": f"Check failed: {str(e)}"
-            }
-        
-        # Проверка памяти
-        try:
-            memory = psutil.virtual_memory()
-            memory_percent = memory.percent
-            checks["memory"] = {
-                "status": "ok" if memory_percent < 90 else "warning",
-                "message": f"{memory_percent:.1f}% used",
-                "used_percent": round(memory_percent, 1),
-                "available_gb": round(memory.available / (1024**3), 2)
-            }
-            if memory_percent > 95:
-                all_healthy = False
-        except Exception as e:
-            checks["memory"] = {
-                "status": "unknown",
-                "message": f"Check failed: {str(e)}"
-            }
-    else:
-        checks["disk"] = {
-            "status": "disabled",
-            "message": "psutil not available (optional)"
-        }
-        checks["memory"] = {
-            "status": "disabled",
-            "message": "psutil not available (optional)"
-        }
-    
-    status = "ok" if all_healthy else "unhealthy"
-    
-    logger.debug(f"Health check: {status}", extra={"checks": checks})
-    
-    return {
-        "status": status,
-        "checks": checks,
-        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
 

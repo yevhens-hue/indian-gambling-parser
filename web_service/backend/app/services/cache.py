@@ -75,7 +75,7 @@ class CacheService:
             if isinstance(arg, (str, int, float, bool)):
                 key_parts.append(str(arg))
             else:
-                key_parts.append(hashlib.md5(str(arg).encode()).hexdigest()[:8])
+                key_parts.append(hashlib.md5(str(arg).encode(), usedforsecurity=False).hexdigest()[:8])
         
         # Добавляем именованные аргументы (отсортированные)
         if kwargs:
@@ -84,12 +84,12 @@ class CacheService:
                 if isinstance(v, (str, int, float, bool)):
                     key_parts.append(f"{k}:{v}")
                 else:
-                    key_parts.append(f"{k}:{hashlib.md5(str(v).encode()).hexdigest()[:8]}")
+                    key_parts.append(f"{k}:{hashlib.md5(str(v).encode(), usedforsecurity=False).hexdigest()[:8]}")
         
         key_string = ":".join(key_parts)
         # Ограничиваем длину ключа (Redis limit ~512MB, но для читаемости ограничиваем)
         if len(key_string) > 250:
-            key_string = key_string[:200] + ":" + hashlib.md5(key_string.encode()).hexdigest()
+            key_string = key_string[:200] + ":" + hashlib.md5(key_string.encode(), usedforsecurity=False).hexdigest()
         
         return key_string
     

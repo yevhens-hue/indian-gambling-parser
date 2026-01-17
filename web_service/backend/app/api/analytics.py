@@ -109,8 +109,9 @@ async def get_dashboard_metrics(
                     
                     payment_method = provider.get('payment_method') or 'unknown'
                     payment_methods[payment_method] += 1
-        except Exception as e:
-            # Игнорируем ошибки парсинга дат
+        except (ValueError, TypeError) as e:
+            # Ошибка парсинга даты - пропускаем запись
+            logger.debug(f"Skipping provider due to date parse error: {e}")
             continue
     
     # Формируем тренды (последние N дней)
@@ -229,7 +230,8 @@ async def get_trends(
             
             payment_method = provider.get('payment_method') or 'unknown'
             trends_by_period[period_key]["by_payment_method"][payment_method] += 1
-        except Exception:
+        except (ValueError, TypeError, KeyError) as e:
+            logger.debug(f"Skipping provider in trends calculation: {e}")
             continue
     
     # Преобразуем в список и сортируем
@@ -309,8 +311,8 @@ async def compare_merchants(
                     
                     if provider_date >= seven_days_ago:
                         new_last_7_days += 1
-            except Exception:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Failed to parse timestamp for comparison: {e}")
         
         comparison[merchant] = {
             "total": len(merchant_providers),
@@ -376,8 +378,8 @@ async def get_provider_details(
                 if provider_date >= days_ago:
                     day_key = provider_date.strftime('%Y-%m-%d')
                     timeline[day_key] += 1
-        except Exception:
-            pass
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Failed to parse timestamp for timeline: {e}")
     
     # Формируем timeline
     timeline_list = []
