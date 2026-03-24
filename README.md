@@ -1,130 +1,66 @@
-# Парсер провайдеров гемблинговых сайтов Индии
+# Data Automation & Notification Backend
 
-Профессиональный парсер для автоматического сбора данных о платёжных провайдерах на сайтах мерчантов индийского рынка.
+A robust backend service and web API designed for parsing, managing, and processing large sets of structured unstructured external provider data. Built for high reliability and strictly typed data integration workflows.
 
-## 📁 Структура проекта
+## Core Architecture
 
-```
-indian_gambling_parser/
-├── provider_parser_playwright.py  # Основной парсер на Playwright
-├── storage.py                     # Работа с БД и экспорт в XLSX
-├── main_parser_playwright.py     # CLI запускатор
-├── merchants_config.py            # Конфигурация мерчантов и креденшиалы
-├── requirements.txt               # Зависимости
-│
-├── README_PLAYWRIGHT.md          # Полная документация
-├── HUMAN_IN_THE_LOOP.md          # Документация по human-in-the-loop
-├── QUICKSTART.md                 # Быстрый старт
-├── ИНСТРУКЦИЯ.md                 # Инструкция на русском
-├── ЧТО_ДЕЛАТЬ.txt                # Краткая инструкция
-│
-├── screenshots/                  # Скриншоты платёжных форм
-├── storage_states/               # Сохранённые cookies (storageState)
-├── traces/                       # Trace файлы для отладки
-│
-├── providers_data.db             # SQLite база данных
-└── providers_data.xlsx           # Excel экспорт результатов
+This service acts as an abstraction layer between external data providers and internal systems, handling normalization, status tracking, and automated event triggers.
+
+```text
+data-automation-service/
+├── api/
+│   ├── routes.py          ← REST API endpoints for downstream consumers
+│   └── webhooks.py        ← Ingestion endpoints for external pushes
+├── core/
+│   ├── parser.py          ← Normalization logic for unstructured external data
+│   └── dedup.py           ← Strict hashing engine to prevent duplicate processing
+├── notifications/
+│   ├── router.py          ← Event-based routing (Webhooks, SMTP, etc.)
+│   └── templates.py       ← Standardized reporting formats
+├── config/
+│   └── providers.json     ← Provider mapping and credential management
+└── requirements.txt
 ```
 
-## 🚀 Быстрый старт
+## Key Features
 
-### 1. Установка
+1. **Massive Data Normalization:** Converts dynamic and rapidly changing feeds from external providers into strict, predictable tracking schemas.
+2. **Reliable External Routing:** Includes highly reliable deduplication logic to safely trigger real-time notifications or external downstream alerts the moment database conditions are met.
+3. **State Management:** Logs every parsed payload with timestamp, source, and ingestion status, allowing complete auditability.
 
+## Installation & Setup
+
+**Configure Environment:**
+Copy the template and fill in your secure credentials or provider keys.
 ```bash
-cd indian_gambling_parser
-pip install -r requirements.txt
-playwright install chromium
+cp .env.example .env
 ```
 
-### 2. Настройка креденшиалов
+**Install Dependencies:**
+```bash
+pip install -r requirements.txt
+```
 
-Отредактируйте `merchants_config.py`:
+**Start the Service:**
+Depending on your server environment, run the service with Uvicorn (or equivalent ASGI server):
+```bash
+uvicorn api.routes:app --host 0.0.0.0 --port 8000 --reload
+```
 
-```python
-"credentials": {
-    "username": "ваш_логин",
-    "password": "ваш_пароль",
+## Notification Workflow
+
+When the `parser.py` engine detects a new valid record or a state change, it automatically formats the payload and triggers the notification router. 
+
+Example of a standard downstream webhook payload:
+```json
+{
+  "event_id": "evt_948fha",
+  "provider": "source_alpha",
+  "status": "PROCESSED",
+  "data": {
+    "normalized_amount": 1500.00,
+    "transaction_ref": "tx_001928"
+  },
+  "timestamp": "2026-03-24T10:15:30Z"
 }
 ```
-
-### 3. Запуск
-
-```bash
-python3 main_parser_playwright.py --merchant 1xbet --url https://indian.1xbet.com
-```
-
-## 📋 Основные команды
-
-```bash
-# Запуск парсера
-python3 main_parser_playwright.py --merchant 1xbet --url https://indian.1xbet.com
-
-# Запуск в headless режиме
-python3 main_parser_playwright.py --merchant 1xbet --url https://indian.1xbet.com --headless
-
-# Просмотр результатов
-python3 main_parser_playwright.py --show-results
-
-# Экспорт в Excel
-python3 main_parser_playwright.py --export-xlsx results.xlsx
-
-# Список доступных мерчантов
-python3 main_parser_playwright.py --list-merchants
-```
-
-## 🔐 Human-in-the-Loop
-
-Парсер поддерживает механизм ручного решения капчи:
-- При обнаружении капчи парсер останавливается
-- Пользователь решает капчу вручную
-- После логина сохраняется storageState (cookies)
-- При следующих запусках используется сохранённый storageState
-
-Подробнее: см. `HUMAN_IN_THE_LOOP.md`
-
-## 📊 Структура данных
-
-Парсер собирает следующие данные:
-- `merchant` - ID мерчанта
-- `merchant_domain` - Домен мерчанта
-- `account_type` - Тип аккаунта
-- `provider_domain` - Домен провайдера
-- `provider_name` - Имя провайдера
-- `provider_entry_url` - Первый внешний URL
-- `final_url` - Финальный URL после редиректов
-- `cashier_url` - URL страницы кэшира
-- `screenshot_path` - Путь к скриншоту
-- `detected_in` - Где обнаружен (button_text/iframe/network)
-- `payment_method` - Метод оплаты (UPI/Card/Wallet)
-- `is_iframe` - Форма в iframe
-- `timestamp_utc` - Время создания
-
-## 🛠️ Технологии
-
-- **Playwright** - автоматизация браузера
-- **SQLite** - база данных
-- **pandas/openpyxl** - экспорт в Excel
-- **tldextract** - нормализация доменов
-
-## 📝 Документация
-
-- `README_PLAYWRIGHT.md` - полная документация
-- `QUICKSTART.md` - быстрый старт
-- `HUMAN_IN_THE_LOOP.md` - механизм human-in-the-loop
-- `ИНСТРУКЦИЯ.md` - инструкция на русском
-
-## ⚠️ Важно
-
-- Креденшиалы хранятся в `merchants_config.py` (для продакшена используйте секрет-хранилище)
-- Скриншоты могут содержать PII - обеспечьте контроль доступа
-- Логи не выводят пароли/токены
-
-## 📞 Поддержка
-
-При возникновении проблем:
-1. Проверьте логи в терминале
-2. Просмотрите trace файлы: `playwright show-trace traces/*.zip`
-3. Проверьте скриншоты в папке `screenshots/`
-
-
-
